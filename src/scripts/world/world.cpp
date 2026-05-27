@@ -18,29 +18,79 @@ std::mt19937 gen(rd());
 
 std::uniform_int_distribution<> dis(0, 9);
 
+
 void world::create_world(int w, int h, const char *world_file_path) {
-  std::ofstream outFile(world_file_path, std::ios::binary);
-  outFile.write(reinterpret_cast<const char *>(&w), sizeof(w));
-  outFile.write(reinterpret_cast<const char *>(&h), sizeof(h));
-  for (int i = 0; i < w; i++) {
-    for (int j = 0; j < h; j++) {
-      zero = dis(gen);
-      outFile.write(reinterpret_cast<const char *>(&zero), 1);
+    try {
+        // 1. Convert the root path to a string and build subdirectories
+        std::string rootStr(world_file_path);
+        std::string mapDir = rootStr + "/map";
+        std::string buildingDir = rootStr + "/building";
+        std::string playerDir = rootStr + "/player";
+
+        std::filesystem::create_directories(mapDir);
+        std::filesystem::create_directories(buildingDir);
+        std::filesystem::create_directories(playerDir);
+  
+
+        // 2. Point the map file directly into the /map subfolder
+        std::string mapFilePath = mapDir + "/world.dat";
+        std::ofstream outFile(mapFilePath, std::ios::binary);
+
+        if (!outFile.is_open()) {
+            std::cerr << "Error: Could not create world.dat at " << mapFilePath << std::endl;
+            return;
+        }
+
+        // Assign widths so game memory updates immediately
+        width = w;
+        height = h;
+
+        // 3. Write your map header (Width and Height)
+        outFile.write(reinterpret_cast<const char *>(&w), sizeof(w));
+        outFile.write(reinterpret_cast<const char *>(&h), sizeof(h));
+
+        // 4. Generate and write tile IDs sequentially
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < h; j++) {
+                zero = dis(gen); // Your random generator
+                outFile.write(reinterpret_cast<const char *>(&zero), 1); 
+            }
+        }
+
+        outFile.close();
+        std::cout << "World structure successfully generated at: " << world_file_path << std::endl;
+
+    } catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "Filesystem setup failed: " << e.what() << std::endl;
     }
-  }
 }
 
 void world::load_world(const char *world_file_path) {
-  std::ifstream inFile(world_file_path, std::ios::binary);
+    // Convert root folder to string and append the correct subpath
+    std::string mapFilePath = std::string(world_file_path) + "/map/world.dat";
+    std::ifstream inFile(mapFilePath, std::ios::binary);
 
-  inFile.read(reinterpret_cast<char *>(&width), sizeof(width));
-  inFile.read(reinterpret_cast<char *>(&height), sizeof(height));
+    if (!inFile.is_open()) {
+        std::cerr << "Error: Map file missing at " << mapFilePath << std::endl;
+        return;
+    }
 
-  worldvector.resize(width * height);
+    // Read the width and height header
+    inFile.read(reinterpret_cast<char *>(&width), sizeof(width));
+    inFile.read(reinterpret_cast<char *>(&height), sizeof(height));
 
-  inFile.read(reinterpret_cast<char *>(worldvector.data()),
-              worldvector.size() * sizeof(uint8_t));
+    // Allocate memory for your vector map layout
+    worldvector.resize(width * height);
+
+    // Bulk read all the tiles sequentially out of the file stream
+    inFile.read(reinterpret_cast<char *>(worldvector.data()),
+                worldvector.size() * sizeof(uint8_t));
+
+    inFile.close();
+    std::cout << "Successfully loaded map layout! Size: " << width << "x" << height << std::endl;
 }
+
+
 
 uint8_t world::get_tileID(int x, int y) { return worldvector[x + y * width]; }
 
@@ -54,19 +104,20 @@ void world::set_tileID(int x, int y, uint8_t tileID) {
 }
 
 void world::save_world(const char *filename) {
-  std::ofstream worldfile(filename, std::ios::binary);
-  worldfile.write(reinterpret_cast<char *>(&width), sizeof(width));
-  worldfile.write(reinterpret_cast<char *>(&height), sizeof(height));
+  std::ofstream worldfile(std::string(filename) + "/map/world.dat", std::ios::binary);
   if (worldfile.is_open()) {
+    worldfile.write(reinterpret_cast<char *>(&width), sizeof(width));
+    worldfile.write(reinterpret_cast<char *>(&height), sizeof(height));
     for (const auto &tile : worldvector) {
       worldfile.write(reinterpret_cast<const char *>(&tile), sizeof(tile));
     }
+    worldfile.close();
   }
 }
 
 void world::load_buildings(const char *folder) {
   try {
-    for (const auto &entry : std::filesystem::directory_iterator(folder))
+    for (const auto &entry : std::filesystem::directory_iterator(std::string(folder) + "/building")) {
       if (entry.is_regular_file()) {
         if (entry.path().filename() == "chests.dat") {
           std::ifstream buildingfile(entry.path() , std::ios::binary);
@@ -118,6 +169,7 @@ void world::load_buildings(const char *folder) {
           }
         }
       }
+    }
   } catch (const std::filesystem::filesystem_error &e) {
     std::cerr << "Error" << e.what() << std::endl;
   }
@@ -126,14 +178,15 @@ void world::load_buildings(const char *folder) {
 void world::save_buildings(const char *folder) {
   try {
     // 1. Ensure the save folder actually exists on the hard drive
-    if (!std::filesystem::exists(folder)) {
-      std::filesystem::create_directories(folder);
+    std::string buildingDir = std::string(folder) + "/building";
+    if (!std::filesystem::exists(buildingDir)) {
+      std::filesystem::create_directories(buildingDir);
     }
 
     // ==========================================
     // SECTION 1: SAVE CHESTS
     // ==========================================
-    std::string chestPath = std::string(folder) + "/chests.dat";
+    std::string chestPath = buildingDir + "/chests.dat";
     std::ofstream chestFile(chestPath, std::ios::binary);
 
     if (chestFile.is_open()) {

@@ -17,6 +17,9 @@ struct chest {
     x = gridX;
     y = gridY;
     slots.resize(slotcount);
+    for(auto& slot : slots){
+      slot = (ChestItem) { -1 , 0};
+    }
   }
 
   void printInventory() const {

@@ -1,10 +1,12 @@
+#include "../building/chest.h"
 #include "../player/player.h"
 #include "../renderer/renderer.h"
 #include "../world/world.h"
 #include "raylib.h"
 #include <cstdint>
 #include <random>
-#include "../building/chest.h"
+#include <string>
+#include <set>
 
 renderer RENDERER;
 world WORLD;
@@ -46,19 +48,19 @@ void placement1(Vector2 mouseScreen) {
     DrawRectangle((int)screenX, (int)screenY, 32, 32, (Color){0, 0, 250, 150});
   }
 
-  if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+  if ( IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && std::set<uint8_t>{11}.count(WORLD.get_tileID(gridX , gridY)) == 0 ) {
     uint8_t newTileID = 11;
     WORLD.set_tileID(gridX, gridY, newTileID);
-    struct chest newChest(gridX , gridY , 5);
+    struct chest newChest(gridX, gridY, 5);
     newChest.chestID = 1;
-    newChest.slots[0] = ((ChestItem){0 , 1});
-    newChest.slots[1] = ((ChestItem){1 , 5});
-    WORLD.chests.push_back(newChest);
+    newChest.slots[0] = ((ChestItem){0, 1});
+    newChest.slots[1] = ((ChestItem){1, 5});
+    WORLD.chests.push_back(newChest);    
+    for (const auto &chest : WORLD.chests) {
+      chest.printInventory();
+    }
   }
 }
-
-
-
 
 void draw_game(float world_x, float world_y) {
   // 1. Calculate the raw screen-space top-left corner in world pixels.
@@ -117,47 +119,80 @@ int main() {
   //  WORLD.create_world(100, 100, "../src/assets/maps/world.dat");
   RENDERER.load_assets();
   //  WORLD.create_world(50 , 50 ,"../src/assets/maps/world.dat");
-//  WORLD.create_world(50, 50, "../src/assets/maps/world.dat");
-  WORLD.load_world("../src/assets/maps/world.dat");
-  WORLD.load_buildings("../src/assets/buildings");
-  PLAYER_ENTITY.load_inventory("../src/assets/maps/inventory.json");
-  PLAYER_ENTITY.playerX = WORLD.width * 16;
-  PLAYER_ENTITY.playerY = WORLD.height * 16;
-  PLAYER_ENTITY.speed = 10.0f;
+  //  WORLD.create_world(50, 50, "../src/assets/maps/world.dat");
+  std::string worldname = "";
+  while (worldname != "1" && worldname != "2") {
+    std::cout << "Choose (1) create_world (2) load_world -> ";
+
+    std::cin >> worldname;
+    if (worldname == "1") {
+      std::cout << "Enter world name -> ";
+      std::cin >> worldname;
+      worldname = "../src/assets/maps/" + worldname;
+      int w, h;
+      std::cout << "Enter width should be between 100 to 10000 -> ";
+      std::cin >> w;
+      std::cout << "Enter height should be between 100 to 10000 -> ";
+      std::cin >> h;
+      if ((w >= 100 && w <= 10000) && (h >= 100 && h <= 10000)) {
+        WORLD.create_world(w, h, (worldname).c_str());
+      } else {
+        WORLD.create_world(100, 100, (worldname).c_str());
+      }
+      WORLD.load_world(worldname.c_str());
+      WORLD.load_buildings(worldname.c_str());
+      PLAYER_ENTITY.load_inventory(worldname.c_str());
+      PLAYER_ENTITY.playerX = WORLD.width * 16;
+      PLAYER_ENTITY.playerY = WORLD.height * 16;
+      PLAYER_ENTITY.speed = 10.0f;
+      break;
+    } else if (worldname == "2") {
+      std::cout << "Enter world name -> ";
+      std::cin >> worldname;
+      worldname = "../src/assets/maps/" + worldname;
+      WORLD.load_world((worldname).c_str());
+
+      PLAYER_ENTITY.load_inventory(worldname.c_str());
+      PLAYER_ENTITY.playerX = WORLD.width * 16;
+      PLAYER_ENTITY.playerY = WORLD.height * 16;
+      PLAYER_ENTITY.speed = 10.0f;
+      break;
+    }
+  }
   while (!WindowShouldClose()) {
     ClearBackground(BLACK);
     BeginDrawing();
 
     // Keyboard handling/////////////////////////////////////////////////
 
-     
     float speed = PLAYER_ENTITY.speed;
 
     // 1. Clean Save Check (Completely separate!)
-    if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) && IsKeyPressed(KEY_S)) {
-        WORLD.save_world("../src/assets/maps/world.dat");
-        WORLD.save_buildings("../src/assets/buildings");
-        TraceLog(LOG_INFO, "World saved successfully.");
+    if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
+        IsKeyPressed(KEY_S)) {
+      WORLD.save_world(worldname.c_str());
+      WORLD.save_buildings(worldname.c_str());
+      TraceLog(LOG_INFO, "World saved successfully.");
     }
 
     // 2. Pure, Unrestricted Movement (No broken math conditions blocking you)
     if (IsKeyDown(KEY_W)) {
-        PLAYER_ENTITY.playerY -= speed;
+      PLAYER_ENTITY.playerY -= speed;
     }
     if (IsKeyDown(KEY_S)) {
-        PLAYER_ENTITY.playerY += speed;
+      PLAYER_ENTITY.playerY += speed;
     }
     if (IsKeyDown(KEY_D)) {
-        PLAYER_ENTITY.playerX += speed;
+      PLAYER_ENTITY.playerX += speed;
     }
     if (IsKeyDown(KEY_A)) {
-        PLAYER_ENTITY.playerX -= speed;
+      PLAYER_ENTITY.playerX -= speed;
     }
 
     // 3. Build mode toggle
     if (IsKeyPressed(KEY_B)) {
-        isBuildMode = !isBuildMode;
-    }////////////////////////////////////////////////////////////////////
+      isBuildMode = !isBuildMode;
+    } ////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////
 
     // Draw tiles on screen/////////////////
@@ -169,10 +204,7 @@ int main() {
     if (isBuildMode) {
       placement1(GetMousePosition());
     }
-    
-    for( const auto& chest : WORLD.chests){
-      chest.printInventory();
-    }
+
 
     EndDrawing();
   }
