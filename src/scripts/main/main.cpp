@@ -118,9 +118,9 @@ int main() {
   RENDERER.load_assets();
   //  WORLD.create_world(50 , 50 ,"../src/assets/maps/world.dat");
 //  WORLD.create_world(50, 50, "../src/assets/maps/world.dat");
-  WORLD.load_world("../src/assets/maps/world.dat");
-  WORLD.load_buildings("../src/assets/buildings");
-  PLAYER_ENTITY.load_inventory("../src/assets/maps/inventory.json");
+  WORLD.load_world("src/assets/maps/world.dat");
+  WORLD.load_buildings("src/assets/buildings");
+  PLAYER_ENTITY.load_inventory("src/assets/maps/inventory.json");
   PLAYER_ENTITY.playerX = WORLD.width * 16;
   PLAYER_ENTITY.playerY = WORLD.height * 16;
   PLAYER_ENTITY.speed = 10.0f;
@@ -135,8 +135,8 @@ int main() {
 
     // 1. Clean Save Check (Completely separate!)
     if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) && IsKeyPressed(KEY_S)) {
-        WORLD.save_world("../src/assets/maps/world.dat");
-        WORLD.save_buildings("../src/assets/buildings");
+        WORLD.save_world("src/assets/maps/world.dat");
+        WORLD.save_buildings("src/assets/buildings");
         TraceLog(LOG_INFO, "World saved successfully.");
     }
 

@@ -1,5 +1,5 @@
 #include "player.h"
-#include "../nlohmanjson/json.hpp"
+#include <nlohmann/json.hpp>
 #include <fstream>
 
 using json = nlohmann::json;
@@ -31,6 +31,7 @@ void player::load_inventory(const char* filename){
       {1 , "axe" , 1 , 1}
     };
     save_inventory(filename);
+    return;
   }
 
   json j;
