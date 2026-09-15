@@ -1,3 +1,4 @@
+
 #include "../building/chest.h"
 #include "../player/player.h"
 #include "../renderer/renderer.h"
@@ -15,6 +16,7 @@ player PLAYER_ENTITY;
 Vector2 worldMousePos;
 
 bool isBuildMode = false;
+std::string currentWorldFolder = ""; // Tracks the active world root directory globally
 
 void placement1(Vector2 mouseScreen) {
   // 1. Match your draw_game camera exactly
@@ -45,7 +47,7 @@ void placement1(Vector2 mouseScreen) {
   if (gridX >= 0 && gridX < WORLD.width && gridY >= 0 && gridY < WORLD.height) {
 
     // TEST B: Draw the actual snapping green box
-    DrawRectangle((int)screenX, (int)screenY, 32, 32, (Color){0, 0, 250, 150});
+    DrawTexture(RENDERER.textures[10], screenX, screenY, Fade(WHITE , 0.4f));
   }
 
   if ( IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && std::set<uint8_t>{11}.count(WORLD.get_tileID(gridX , gridY)) == 0 ) {
@@ -64,7 +66,6 @@ void placement1(Vector2 mouseScreen) {
 
 void draw_game(float world_x, float world_y) {
   // 1. Calculate the raw screen-space top-left corner in world pixels.
-  // This shifts our window view so the player is centered at (400, 240)
   float topLeftWorldX = world_x - 400.0f;
   float topLeftWorldY = world_y - 240.0f;
 
@@ -72,41 +73,31 @@ void draw_game(float world_x, float world_y) {
   int startTileX = (int)(topLeftWorldX / 32.0f);
   int startTileY = (int)(topLeftWorldY / 32.0f);
 
-  // Handle negative positions safely so the tiles don't glitch at the map
-  // origin
-  // Handle negative positions safely so the tiles don't glitch at the map
-  // origin
   startTileX--;
   if (topLeftWorldY < 0)
     startTileY--;
 
   // 3. Loop through a fixed grid relative to your screen space.
-  // 27 columns across (800 / 32 = 25 tiles + 2 extra for edge padding)
-  // 17 rows down (480 / 32 = 15 tiles + 2 extra for edge padding)
   for (int col = 0; col < 27; col++) {
     for (int row = 0; row < 17; row++) {
 
-      // Map the screen loop to the correct absolute tile index in your vector
       int targetTileX = startTileX + col;
       int targetTileY = startTileY + row;
 
-      // 4. FIX Calculate the screen position directly from the absolute world
-      // position This bypasses the actualX/actualY snap point entirely.
+      // 4. Calculate the screen position directly from the absolute world position
       float drawX = (targetTileX * 32.0f) - topLeftWorldX;
       float drawY = (targetTileY * 32.0f) - topLeftWorldY;
 
-      // Simple bounds check for your 100x100 world vector
+      // Simple bounds check
       if (targetTileX >= 0 && targetTileX < WORLD.width && targetTileY >= 0 &&
           targetTileY < WORLD.height) {
 
         int tileID = WORLD.get_tileID(targetTileX, targetTileY);
 
-        // Draw using standard integer conversion at the very last step
         if (tileID != 11) {
           RENDERER.draw_tile((int)drawX, (int)drawY, tileID);
         } else {
-          DrawRectangle((int)drawX, (int)drawY, 32, 32,
-                        (Color){0, 0, 255, 100});
+          DrawTexture(RENDERER.textures[10], drawX, drawY, WHITE);
         }
       }
     }
@@ -116,66 +107,78 @@ void draw_game(float world_x, float world_y) {
 int main() {
   InitWindow(800, 480, "Game");
   SetTargetFPS(60);
-  //  WORLD.create_world(100, 100, "../src/assets/maps/world.dat");
   RENDERER.load_assets();
-  //  WORLD.create_world(50 , 50 ,"../src/assets/maps/world.dat");
-  //  WORLD.create_world(50, 50, "../src/assets/maps/world.dat");
-  std::string worldname = "";
-  while (worldname != "1" && worldname != "2") {
-    std::cout << "Choose (1) create_world (2) load_world -> ";
 
-    std::cin >> worldname;
-    if (worldname == "1") {
+  std::string choice = "";
+  while (choice != "1" && choice != "2") {
+    std::cout << "Choose (1) create_world (2) load_world -> ";
+    std::cin >> choice;
+
+    if (choice == "1") {
+      std::string worldname;
       std::cout << "Enter world name -> ";
       std::cin >> worldname;
-      worldname = "../src/assets/maps/" + worldname;
+      
+      // ✅ UNIFIED PATH STRATEGY: Base directory folder without a dangling file name
+      currentWorldFolder = "src/assets/maps/" + worldname;
+      
       int w, h;
       std::cout << "Enter width should be between 100 to 10000 -> ";
       std::cin >> w;
       std::cout << "Enter height should be between 100 to 10000 -> ";
       std::cin >> h;
+      
       if ((w >= 100 && w <= 10000) && (h >= 100 && h <= 10000)) {
-        WORLD.create_world(w, h, (worldname).c_str());
+        WORLD.create_world(w, h, currentWorldFolder.c_str());
       } else {
-        WORLD.create_world(100, 100, (worldname).c_str());
+        WORLD.create_world(100, 100, currentWorldFolder.c_str());
       }
-      WORLD.load_world(worldname.c_str());
-      WORLD.load_buildings(worldname.c_str());
-      PLAYER_ENTITY.load_inventory(worldname.c_str());
+      
+      // ✅ FIX: Load directly out of the folder you created
+      WORLD.load_world(currentWorldFolder.c_str());
+      WORLD.load_buildings(currentWorldFolder.c_str());
+      
+      PLAYER_ENTITY.load_inventory("src/assets/maps/inventory.json");
       PLAYER_ENTITY.playerX = WORLD.width * 16;
       PLAYER_ENTITY.playerY = WORLD.height * 16;
       PLAYER_ENTITY.speed = 10.0f;
       break;
-    } else if (worldname == "2") {
+
+    } else if (choice == "2") {
+      std::string worldname;
       std::cout << "Enter world name -> ";
       std::cin >> worldname;
-      worldname = "../src/assets/maps/" + worldname;
-      WORLD.load_world((worldname).c_str());
+      
+      // ✅ FIX: Base directory parsing matches creation layout
+      currentWorldFolder = "src/assets/maps/" + worldname;
+      
+      WORLD.load_world(currentWorldFolder.c_str());
+      WORLD.load_buildings(currentWorldFolder.c_str());
 
-      PLAYER_ENTITY.load_inventory(worldname.c_str());
+      PLAYER_ENTITY.load_inventory("src/assets/maps/inventory.json");
       PLAYER_ENTITY.playerX = WORLD.width * 16;
       PLAYER_ENTITY.playerY = WORLD.height * 16;
       PLAYER_ENTITY.speed = 10.0f;
       break;
     }
   }
+
   while (!WindowShouldClose()) {
     ClearBackground(BLACK);
     BeginDrawing();
 
-    // Keyboard handling/////////////////////////////////////////////////
-
     float speed = PLAYER_ENTITY.speed;
 
-    // 1. Clean Save Check (Completely separate!)
+    // 1. Clean Save Check (Targeting currentWorldFolder dynamically!)
     if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
         IsKeyPressed(KEY_S)) {
-      WORLD.save_world(worldname.c_str());
-      WORLD.save_buildings(worldname.c_str());
-      TraceLog(LOG_INFO, "World saved successfully.");
+        // ✅ FIX: Saves your game directly to your open profile runtime variables!
+        WORLD.save_world(currentWorldFolder.c_str());
+        WORLD.save_buildings(currentWorldFolder.c_str());
+        TraceLog(LOG_INFO, "World saved successfully.");
     }
 
-    // 2. Pure, Unrestricted Movement (No broken math conditions blocking you)
+    // 2. Movement handling
     if (IsKeyDown(KEY_W)) {
       PLAYER_ENTITY.playerY -= speed;
     }
@@ -192,25 +195,21 @@ int main() {
     // 3. Build mode toggle
     if (IsKeyPressed(KEY_B)) {
       isBuildMode = !isBuildMode;
-    } ////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////
+    }
 
-    // Draw tiles on screen/////////////////
+    // Draw tiles on screen
     draw_game(PLAYER_ENTITY.playerX, PLAYER_ENTITY.playerY);
 
-    //////////////////////////////////////
-
-    // Build mode
+    // Build mode logic
     if (isBuildMode) {
       placement1(GetMousePosition());
     }
-
 
     EndDrawing();
   }
 
   RENDERER.unload_assets();
-
   CloseWindow();
   return 0;
 }
+
