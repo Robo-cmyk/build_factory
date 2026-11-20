@@ -24,6 +24,4 @@ class player {
 
     void save_inventory(const char*);
     void load_inventory(const char*);
-
-  
 };

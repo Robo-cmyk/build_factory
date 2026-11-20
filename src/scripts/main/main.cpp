@@ -4,6 +4,7 @@
 #include "../renderer/renderer.h"
 #include "../world/world.h"
 #include "raylib.h"
+#include <algorithm>
 #include <cstdint>
 #include <random>
 #include <string>
@@ -57,7 +58,7 @@ void placement1(Vector2 mouseScreen) {
     newChest.chestID = 1;
     newChest.slots[0] = ((ChestItem){0, 1});
     newChest.slots[1] = ((ChestItem){1, 5});
-    WORLD.chests.push_back(newChest);    
+    WORLD.chests.push_back(newChest);
     for (const auto &chest : WORLD.chests) {
       chest.printInventory();
     }
@@ -118,26 +119,26 @@ int main() {
       std::string worldname;
       std::cout << "Enter world name -> ";
       std::cin >> worldname;
-      
-      // ✅ UNIFIED PATH STRATEGY: Base directory folder without a dangling file name
+
+      // UNIFIED PATH STRATEGY: Base directory folder without a dangling file name
       currentWorldFolder = "src/assets/maps/" + worldname;
-      
+
       int w, h;
       std::cout << "Enter width should be between 100 to 10000 -> ";
       std::cin >> w;
       std::cout << "Enter height should be between 100 to 10000 -> ";
       std::cin >> h;
-      
+
       if ((w >= 100 && w <= 10000) && (h >= 100 && h <= 10000)) {
         WORLD.create_world(w, h, currentWorldFolder.c_str());
       } else {
         WORLD.create_world(100, 100, currentWorldFolder.c_str());
       }
-      
-      // ✅ FIX: Load directly out of the folder you created
+
+      // FIX: Load directly out of the folder you created
       WORLD.load_world(currentWorldFolder.c_str());
       WORLD.load_buildings(currentWorldFolder.c_str());
-      
+
       PLAYER_ENTITY.load_inventory("src/assets/maps/inventory.json");
       PLAYER_ENTITY.playerX = WORLD.width * 16;
       PLAYER_ENTITY.playerY = WORLD.height * 16;
@@ -148,10 +149,10 @@ int main() {
       std::string worldname;
       std::cout << "Enter world name -> ";
       std::cin >> worldname;
-      
+
       // ✅ FIX: Base directory parsing matches creation layout
       currentWorldFolder = "src/assets/maps/" + worldname;
-      
+
       WORLD.load_world(currentWorldFolder.c_str());
       WORLD.load_buildings(currentWorldFolder.c_str());
 
@@ -172,7 +173,7 @@ int main() {
     // 1. Clean Save Check (Targeting currentWorldFolder dynamically!)
     if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
         IsKeyPressed(KEY_S)) {
-        // ✅ FIX: Saves your game directly to your open profile runtime variables!
+        // Saves your game directly to your open profile runtime variables!
         WORLD.save_world(currentWorldFolder.c_str());
         WORLD.save_buildings(currentWorldFolder.c_str());
         TraceLog(LOG_INFO, "World saved successfully.");
@@ -190,6 +191,15 @@ int main() {
     }
     if (IsKeyDown(KEY_A)) {
       PLAYER_ENTITY.playerX -= speed;
+    }
+
+    //prevent player from going out of bounds
+    PLAYER_ENTITY.playerY = std::clamp(PLAYER_ENTITY.playerY, 240, WORLD.height);
+    PLAYER_ENTITY.playerX = std::clamp(PLAYER_ENTITY.playerX, 400, WORLD.width);
+
+    //increase/decrease speed on scrolling mouse wheel
+    if(GetMouseWheelMoveV().y != 0.0) {
+        PLAYER_ENTITY.speed += GetMouseWheelMoveV().y * 2.0f;
     }
 
     // 3. Build mode toggle
@@ -212,4 +222,3 @@ int main() {
   CloseWindow();
   return 0;
 }
-
