@@ -27,12 +27,13 @@ std::uniform_int_distribution<> dis(0, 9); ///< Uniform distribution generating 
 
 /**
  * @func world::create_world
- * @brief Scaffolds the world save directory structure and generates a randomized binary map file.
+ * @brief Scaffolds the world save directory structure and generates a Perlin-noise biome map file.
  * @param w The horizontal width of the new world in tiles.
  * @param h The vertical height of the new world in tiles.
  * @param world_file_path Root directory path where the world folders and files will be created.
+ * @param seed Seed value for reproducible terrain generation (0 falls back to a random hardware seed).
  */
-void world::create_world(int w, int h, const char *world_file_path) {
+void world::create_world(int w, int h, const char *world_file_path, unsigned int seed) {
     try {
         // 1. Convert the root path to a string and build required subdirectories
         std::string rootStr(world_file_path);
@@ -53,24 +54,124 @@ void world::create_world(int w, int h, const char *world_file_path) {
             return;
         }
 
-        // Update instance dimensions immediately
+        // Update instance dimensions and allocate flattened map buffer
         width = w;
         height = h;
+        worldvector.resize(width * height);
 
-        // 3. Write the binary map header (Width followed by Height)
+        // 3. Build permutation tables for Elevation and Temperature Perlin noise
+        unsigned int baseSeed = (seed != 0) ? seed : rd();
+        std::vector<int> pElev(256), pTemp(256);
+        std::iota(pElev.begin(), pElev.end(), 0);
+        std::iota(pTemp.begin(), pTemp.end(), 0);
+
+        std::mt19937 genElev(baseSeed);
+        std::mt19937 genTemp(baseSeed + 1337u); // Offset seed so temperature differs from elevation
+        std::shuffle(pElev.begin(), pElev.end(), genElev);
+        std::shuffle(pTemp.begin(), pTemp.end(), genTemp);
+
+        // Duplicate tables to avoid index overflow during gradient lookups
+        pElev.insert(pElev.end(), pElev.begin(), pElev.end());
+        pTemp.insert(pTemp.end(), pTemp.begin(), pTemp.end());
+
+        // Local lambda computing multi-octave 2D Perlin noise normalized to [0.0, 1.0]
+        auto samplePerlin = [](const std::vector<int> &p, float x, float y, int octaves) -> float {
+            auto fade = [](float t) { return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f); };
+            auto lerp = [](float t, float a, float b) { return a + t * (b - a); };
+            auto grad = [](int hash, float gx, float gy) {
+                switch (hash & 7) {
+                    case 0:  return  gx + gy;
+                    case 1:  return -gx + gy;
+                    case 2:  return  gx - gy;
+                    case 3:  return -gx - gy;
+                    case 4:  return  gx;
+                    case 5:  return -gx;
+                    case 6:  return  gy;
+                    default: return -gy;
+                }
+            };
+
+            float total = 0.0f;
+            float frequency = 1.0f;
+            float amplitude = 1.0f;
+            float maxValue = 0.0f;
+
+            for (int o = 0; o < octaves; o++) {
+                float sx = x * frequency;
+                float sy = y * frequency;
+
+                int X = static_cast<int>(std::floor(sx)) & 255;
+                int Y = static_cast<int>(std::floor(sy)) & 255;
+                sx -= std::floor(sx);
+                sy -= std::floor(sy);
+
+                float u = fade(sx);
+                float v = fade(sy);
+
+                int A  = p[X] + Y;
+                int AA = p[A];
+                int AB = p[A + 1];
+                int B  = p[X + 1] + Y;
+                int BA = p[B];
+                int BB = p[B + 1];
+
+                float n = lerp(v,
+                    lerp(u, grad(p[AA], sx, sy),        grad(p[BA], sx - 1.0f, sy)),
+                    lerp(u, grad(p[AB], sx, sy - 1.0f), grad(p[BB], sx - 1.0f, sy - 1.0f))
+                );
+
+                total += n * amplitude;
+                maxValue += amplitude;
+                amplitude *= 0.5f;
+                frequency *= 2.0f;
+            }
+
+            float normalized = (total / maxValue) * 0.5f + 0.5f;
+            return std::clamp(normalized, 0.0f, 1.0f);
+        };
+
+        // 4. Write the binary map header (Width followed by Height)
         outFile.write(reinterpret_cast<const char *>(&w), sizeof(w));
         outFile.write(reinterpret_cast<const char *>(&h), sizeof(h));
 
-        // 4. Generate and write randomized tile IDs sequentially (w * h bytes total)
-        for (int i = 0; i < w; i++) {
-            for (int j = 0; j < h; j++) {
-                zero = dis(gen); // Generate a random tile ID between 0 and 9
-                outFile.write(reinterpret_cast<const char *>(&zero), 1); 
+        const float elevationScale = 0.02f;   // Controls continent/ocean size
+        const float temperatureScale = 0.008f; // Controls climate zone size
+        const float seaLevel = 0.35f;          // Elevation threshold separating ocean from land
+        const float lapseRate = 0.90f;         // How strongly high elevation cools down temperature
+
+        // 5. Generate tiles in row-major order (y outer, x inner) matching get_tileID(x, y)
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                float elevation = samplePerlin(pElev, x * elevationScale, y * elevationScale, 5);
+                float baseTemp  = samplePerlin(pTemp, x * temperatureScale, y * temperatureScale, 4);
+
+                // Higher elevation reduces temperature; lowlands stay warm
+                float altitude = std::max(0.0f, elevation - seaLevel);
+                float temperature = std::clamp(baseTemp - (altitude * lapseRate), 0.0f, 1.0f);
+
+                // Placeholder value-to-tileID mapping (ready to replace with your final function)
+                uint8_t tileID = 0;
+                if (elevation < seaLevel) {
+                    tileID = 0; // Ocean / Water
+                } else if (temperature < 0.20f) {
+                    tileID = 1; // Ice / Snow peak biome (lowest temp / highest altitude)
+                } else if (temperature < 0.40f) {
+                    tileID = 2; // Tundra / Cold highland biome
+                } else if (temperature < 0.65f) {
+                    tileID = 3; // Temperate Grassland
+                } else if (temperature < 0.80f) {
+                    tileID = 4; // Savanna / Warm lowland plains
+                } else {
+                    tileID = 5; // Desert biome (highest temp & low elevation)
+                }
+
+                worldvector[y * width + x] = tileID;
+                outFile.write(reinterpret_cast<const char *>(&tileID), sizeof(tileID));
             }
         }
 
         outFile.close();
-        std::cout << "World structure successfully generated at: " << world_file_path << std::endl;
+        std::cout << "Perlin world (Seed: " << baseSeed << ") successfully generated at: " << world_file_path << std::endl;
 
     } catch (const std::filesystem::filesystem_error& e) {
         std::cerr << "Filesystem setup failed: " << e.what() << std::endl;
