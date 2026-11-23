@@ -21,8 +21,8 @@ std::string currentWorldFolder = ""; // Tracks the active world root directory g
 
 void placement1(Vector2 mouseScreen) {
   // 1. Match your draw_game camera exactly
-  float topLeftWorldX = PLAYER_ENTITY.playerX - 400.0f;
-  float topLeftWorldY = PLAYER_ENTITY.playerY - 240.0f;
+  float topLeftWorldX = PLAYER_ENTITY.playerX - GetScreenWidth()/2.0f;
+  float topLeftWorldY = PLAYER_ENTITY.playerY - GetScreenHeight()/2.0f;
 
   // 2. Get true world position
   float mouseWorldX = topLeftWorldX + mouseScreen.x;
@@ -67,20 +67,22 @@ void placement1(Vector2 mouseScreen) {
 
 void draw_game(float world_x, float world_y) {
   // 1. Calculate the raw screen-space top-left corner in world pixels.
-  float topLeftWorldX = world_x - 400.0f;
-  float topLeftWorldY = world_y - 240.0f;
+  float topLeftWorldX = world_x - GetScreenWidth()/2.0f;
+  float topLeftWorldY = world_y - GetScreenHeight()/2.0f;
 
   // 2. Find the exact integer tile row/col where the screen view starts
   int startTileX = (int)(topLeftWorldX / 32.0f);
   int startTileY = (int)(topLeftWorldY / 32.0f);
+
 
   startTileX--;
   if (topLeftWorldY < 0)
     startTileY--;
 
   // 3. Loop through a fixed grid relative to your screen space.
-  for (int col = 0; col < 27; col++) {
-    for (int row = 0; row < 17; row++) {
+  // the + 2 is for extra row and column, so clipping bug doesnt occur
+  for (int col = 0; col < (GetScreenWidth() / 32) + 2 ; col++) {
+    for (int row = 0; row < (GetScreenHeight() / 32) + 2 ; row++) {
 
       int targetTileX = startTileX + col;
       int targetTileY = startTileY + row;
@@ -106,7 +108,8 @@ void draw_game(float world_x, float world_y) {
 }
 
 int main() {
-  InitWindow(800, 480, "Game");
+  SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+  InitWindow(800, 480, "Build Factory");
   SetTargetFPS(60);
   RENDERER.load_assets();
 
@@ -194,8 +197,8 @@ int main() {
     }
 
     //prevent player from going out of bounds
-    PLAYER_ENTITY.playerY = std::clamp(PLAYER_ENTITY.playerY, 240, WORLD.height);
-    PLAYER_ENTITY.playerX = std::clamp(PLAYER_ENTITY.playerX, 400, WORLD.width);
+    PLAYER_ENTITY.playerY = std::clamp(PLAYER_ENTITY.playerY, GetScreenHeight()/2, WORLD.height);
+    PLAYER_ENTITY.playerX = std::clamp(PLAYER_ENTITY.playerX, GetScreenWidth()/2, WORLD.width);
 
     //increase/decrease speed on scrolling mouse wheel
     if(GetMouseWheelMoveV().y != 0.0) {

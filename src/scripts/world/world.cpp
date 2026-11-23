@@ -18,7 +18,6 @@ std::mt19937 gen(rd());
 
 std::uniform_int_distribution<> dis(0, 9);
 
-
 void world::create_world(int w, int h, const char *world_file_path) {
     try {
         // 1. Convert the root path to a string and build subdirectories
@@ -30,7 +29,7 @@ void world::create_world(int w, int h, const char *world_file_path) {
         std::filesystem::create_directories(mapDir);
         std::filesystem::create_directories(buildingDir);
         std::filesystem::create_directories(playerDir);
-  
+
 
         // 2. Point the map file directly into the /map subfolder
         std::string mapFilePath = mapDir + "/world.dat";
@@ -53,7 +52,7 @@ void world::create_world(int w, int h, const char *world_file_path) {
         for (int i = 0; i < w; i++) {
             for (int j = 0; j < h; j++) {
                 zero = dis(gen); // Your random generator
-                outFile.write(reinterpret_cast<const char *>(&zero), 1); 
+                outFile.write(reinterpret_cast<const char *>(&zero), 1);
             }
         }
 
@@ -217,4 +216,9 @@ void world::save_buildings(const char *folder) {
   } catch (const std::filesystem::filesystem_error &e) {
     std::cerr << "Filesystem Error during save: " << e.what() << std::endl;
   }
+}
+
+void world::set_world_dimensions(int new_width, int new_height) {
+    this->width = new_width;
+    this->height = new_height;
 }
