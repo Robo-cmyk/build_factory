@@ -1,3 +1,12 @@
+/**
+ * @file main.cpp
+ * @brief Entry point and core game loop for the 2D tile-based sandbox game.
+ *
+ * This file initializes the Raylib window and global game subsystems (`renderer`, `world`, and `player`),
+ * handles initial world creation/loading via CLI prompts, and runs the 60 FPS update/render loop.
+ * Core loop responsibilities include camera-centered tile culling, WASD player movement, Ctrl+S
+ * world/building serialization, and a toggleable build mode (`B` key) for placing interactive chests.
+ */
 
 #include "../building/chest.h"
 #include "../player/player.h"
@@ -6,50 +15,58 @@
 #include "raylib.h"
 #include <algorithm>
 #include <cstdint>
-#include <random>
-#include <string>
+#include <iostream>
 #include <set>
+#include <string>
 
-renderer RENDERER;
-world WORLD;
-player PLAYER_ENTITY;
+// Global subsystem instances and runtime state
+renderer RENDERER;                      ///< Global texture manager and tile rendering pipeline
+world WORLD;                            ///< Active world map grid and building/container registry
+player PLAYER_ENTITY;                   ///< Active player entity tracking position, speed, and inventory
 
-Vector2 worldMousePos;
+Vector2 worldMousePos;                  ///< Cached world-space mouse coordinates
+bool isBuildMode = false;               ///< Toggles structure placement preview and left-click building
+std::string currentWorldFolder = "";    ///< Root directory path of the currently active world save
 
-bool isBuildMode = false;
-std::string currentWorldFolder = ""; // Tracks the active world root directory globally
-
+/**
+ * @func placement1
+ * @brief Handles grid-snapping preview and chest placement when Build Mode is active.
+ * @param mouseScreen Current cursor position in screen-space pixels (0..800, 0..480).
+ */
 void placement1(Vector2 mouseScreen) {
-  // 1. Match your draw_game camera exactly
+  // 1. Calculate the top-left corner of the camera viewport in world pixels (centered on player)
   float topLeftWorldX = PLAYER_ENTITY.playerX - 400.0f;
   float topLeftWorldY = PLAYER_ENTITY.playerY - 240.0f;
 
-  // 2. Get true world position
+  // 2. Translate screen-space cursor coordinates into world-space coordinates
   float mouseWorldX = topLeftWorldX + mouseScreen.x;
   float mouseWorldY = topLeftWorldY + mouseScreen.y;
 
-  // 3. Convert to grid space
+  // 3. Convert world pixels into 32x32 grid tile indices
   int gridX = (int)(mouseWorldX / 32.0f);
   int gridY = (int)(mouseWorldY / 32.0f);
 
-  // Handle negative coordinates safely
+  // Adjust floor division for negative world coordinates so snapping stays accurate
   if (mouseWorldX < 0)
     gridX--;
   if (mouseWorldY < 0)
     gridY--;
 
-  // 4. Convert back to screen position using your draw_game math
+  // 4. Convert snapped grid coordinates back into screen-space pixels for rendering the ghost preview
   float screenX = (gridX * 32.0f) - topLeftWorldX;
   float screenY = (gridY * 32.0f) - topLeftWorldY;
 
-  // --- VISUAL DEBUGGER LOOP ---
-
-  // 5. Bounds check against your WORLD dimensions
+  // 5. Verify target tile is within valid world boundaries before drawing or placing
   if (gridX >= 0 && gridX < WORLD.width && gridY >= 0 && gridY < WORLD.height) {
+    // Draw a semi-transparent (40% opacity) iron chest sprite as a placement preview
+    DrawTexture(RENDERER.textures[10], screenX, screenY, Fade(WHITE, 0.4f));
 
-    // TEST B: Draw the actual snapping green box
-    DrawTexture(RENDERER.textures[10], screenX, screenY, Fade(WHITE , 0.4f));
-  }
+    // Place a new chest on left-click if the target tile does not already contain a chest (Tile ID 11)
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
+        std::set<uint8_t>{11}.count(WORLD.get_tileID(gridX, gridY)) == 0) {
+
+      uint8_t newTileID = 11;
+      WORLD.set_tileID(gridX, gridY, newTileID); // Mark tile as occupied by a chest
 
   if ( IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && std::set<uint8_t>{11}.count(WORLD.get_tileID(gridX , gridY)) == 0 ) {
     uint8_t newTileID = 11;
@@ -61,43 +78,65 @@ void placement1(Vector2 mouseScreen) {
     WORLD.chests.push_back(newChest);
     for (const auto &chest : WORLD.chests) {
       chest.printInventory();
+      // Instantiate a 5-slot basic chest with starter debug items and register it in the world
+      struct chest newChest(gridX, gridY, 5);
+      newChest.chestID = 1;
+      newChest.slots[0] = ((ChestItem){0, 1});
+      newChest.slots[1] = ((ChestItem){1, 5});
+      WORLD.chests.push_back(newChest);
+
+      // Debug output: print all active chest inventories to the console
+      for (const auto &chest : WORLD.chests) {
+        chest.printInventory();
+      }
     }
   }
 }
+}
+}
 
+/**
+ * @func draw_game
+ * @brief Renders the visible portion of the world tilemap centered around the given world coordinates.
+ * @param world_x Camera center X-coordinate in world pixels.
+ * @param world_y Camera center Y-coordinate in world pixels.
+ */
 void draw_game(float world_x, float world_y) {
-  // 1. Calculate the raw screen-space top-left corner in world pixels.
+  // 1. Compute top-left camera boundary in world pixels (half of 800x480 resolution)
   float topLeftWorldX = world_x - 400.0f;
   float topLeftWorldY = world_y - 240.0f;
 
-  // 2. Find the exact integer tile row/col where the screen view starts
+  // 2. Determine the starting grid indices visible at the top-left corner of the viewport
   int startTileX = (int)(topLeftWorldX / 32.0f);
   int startTileY = (int)(topLeftWorldY / 32.0f);
 
+  // Pad starting indices by -1 to prevent pop-in along the left and top screen edges
   startTileX--;
   if (topLeftWorldY < 0)
     startTileY--;
 
-  // 3. Loop through a fixed grid relative to your screen space.
+  // 3. Frustum-culled render loop: only iterate over tiles visible within the 800x480 screen (27x17 grid)
   for (int col = 0; col < 27; col++) {
     for (int row = 0; row < 17; row++) {
 
       int targetTileX = startTileX + col;
       int targetTileY = startTileY + row;
 
-      // 4. Calculate the screen position directly from the absolute world position
+      // 4. Project world tile coordinates into screen-space pixel coordinates
       float drawX = (targetTileX * 32.0f) - topLeftWorldX;
       float drawY = (targetTileY * 32.0f) - topLeftWorldY;
 
-      // Simple bounds check
+      // Ensure tile lies within valid map boundaries before querying or drawing
       if (targetTileX >= 0 && targetTileX < WORLD.width && targetTileY >= 0 &&
           targetTileY < WORLD.height) {
 
         int tileID = WORLD.get_tileID(targetTileX, targetTileY);
 
         if (tileID != 11) {
+          // Standard terrain tile (IDs 0–9)
           RENDERER.draw_tile((int)drawX, (int)drawY, tileID);
         } else {
+          // Tile ID 11 maps to index 10 in RENDERER.textures (iron chest sprite)
           DrawTexture(RENDERER.textures[10], drawX, drawY, WHITE);
         }
       }
@@ -105,11 +144,17 @@ void draw_game(float world_x, float world_y) {
   }
 }
 
+/**
+ * @func main
+ * @brief Initializes the game window, handles world setup/loading, and executes the main game loop.
+ * @return int Exit status code (0 on clean shutdown).
+ */
 int main() {
   InitWindow(800, 480, "Game");
   SetTargetFPS(60);
   RENDERER.load_assets();
 
+  // CLI startup menu: prompt user to generate a new world or load an existing save
   std::string choice = "";
   while (choice != "1" && choice != "2") {
     std::cout << "Choose (1) create_world (2) load_world -> ";
@@ -120,7 +165,7 @@ int main() {
       std::cout << "Enter world name -> ";
       std::cin >> worldname;
 
-      // UNIFIED PATH STRATEGY: Base directory folder without a dangling file name
+      // Set unified root folder path for map, building, and player subdirectories
       currentWorldFolder = "src/assets/maps/" + worldname;
 
       int w, h;
@@ -129,16 +174,22 @@ int main() {
       std::cout << "Enter height should be between 100 to 10000 -> ";
       std::cin >> h;
 
+      // Validate dimensions; fallback to 100x100 if out of range
       if ((w >= 100 && w <= 10000) && (h >= 100 && h <= 10000)) {
-        WORLD.create_world(w, h, currentWorldFolder.c_str());
+        WORLD.create_world(w, h, currentWorldFolder.c_str(), 100);
       } else {
-        WORLD.create_world(100, 100, currentWorldFolder.c_str());
+        WORLD.create_world(100, 100, currentWorldFolder.c_str(), 100);
       }
 
       // FIX: Load directly out of the folder you created
       WORLD.load_world(currentWorldFolder.c_str());
       WORLD.load_buildings(currentWorldFolder.c_str());
 
+      // Load newly generated map and building data into memory
+      WORLD.load_world(currentWorldFolder.c_str());
+      WORLD.load_buildings(currentWorldFolder.c_str());
+
+      // Initialize player inventory and spawn player at the center of the map
       PLAYER_ENTITY.load_inventory("src/assets/maps/inventory.json");
       PLAYER_ENTITY.playerX = WORLD.width * 16;
       PLAYER_ENTITY.playerY = WORLD.height * 16;
@@ -150,12 +201,13 @@ int main() {
       std::cout << "Enter world name -> ";
       std::cin >> worldname;
 
-      // ✅ FIX: Base directory parsing matches creation layout
       currentWorldFolder = "src/assets/maps/" + worldname;
 
+      // Load existing map and building data from disk
       WORLD.load_world(currentWorldFolder.c_str());
       WORLD.load_buildings(currentWorldFolder.c_str());
 
+      // Load player inventory and center player spawn position
       PLAYER_ENTITY.load_inventory("src/assets/maps/inventory.json");
       PLAYER_ENTITY.playerX = WORLD.width * 16;
       PLAYER_ENTITY.playerY = WORLD.height * 16;
@@ -164,22 +216,22 @@ int main() {
     }
   }
 
+  // Main 60 FPS game loop
   while (!WindowShouldClose()) {
     ClearBackground(BLACK);
     BeginDrawing();
 
     float speed = PLAYER_ENTITY.speed;
 
-    // 1. Clean Save Check (Targeting currentWorldFolder dynamically!)
+    // 1. Save Shortcut (Ctrl + S): Persist world tiles and buildings to currentWorldFolder
     if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) &&
         IsKeyPressed(KEY_S)) {
-        // Saves your game directly to your open profile runtime variables!
-        WORLD.save_world(currentWorldFolder.c_str());
-        WORLD.save_buildings(currentWorldFolder.c_str());
-        TraceLog(LOG_INFO, "World saved successfully.");
+      WORLD.save_world(currentWorldFolder.c_str());
+      WORLD.save_buildings(currentWorldFolder.c_str());
+      TraceLog(LOG_INFO, "World saved successfully.");
     }
 
-    // 2. Movement handling
+    // 2. Player Movement (WASD)
     if (IsKeyDown(KEY_W)) {
       PLAYER_ENTITY.playerY -= speed;
     }
@@ -207,10 +259,10 @@ int main() {
       isBuildMode = !isBuildMode;
     }
 
-    // Draw tiles on screen
+    // 4. Render visible world tiles around the player
     draw_game(PLAYER_ENTITY.playerX, PLAYER_ENTITY.playerY);
 
-    // Build mode logic
+    // 5. Render placement ghost and handle chest building if Build Mode is active
     if (isBuildMode) {
       placement1(GetMousePosition());
     }
@@ -218,6 +270,7 @@ int main() {
     EndDrawing();
   }
 
+  // Cleanup GPU resources and close Raylib context
   RENDERER.unload_assets();
   CloseWindow();
   return 0;
