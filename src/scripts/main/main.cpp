@@ -6,7 +6,6 @@
 #include "raylib.h"
 #include <algorithm>
 #include <cstdint>
-#include <random>
 #include <string>
 #include <set>
 
@@ -135,7 +134,7 @@ int main() {
       if ((w >= 100 && w <= 10000) && (h >= 100 && h <= 10000)) {
         WORLD.create_world(w, h, currentWorldFolder.c_str());
       } else {
-        WORLD.create_world(100, 100, currentWorldFolder.c_str());
+        WORLD.create_world(150, 150, currentWorldFolder.c_str());
       }
 
       // FIX: Load directly out of the folder you created
@@ -153,7 +152,7 @@ int main() {
       std::cout << "Enter world name -> ";
       std::cin >> worldname;
 
-      // ✅ FIX: Base directory parsing matches creation layout
+      //Base directory parsing matches creation layout
       currentWorldFolder = "src/assets/maps/" + worldname;
 
       WORLD.load_world(currentWorldFolder.c_str());
@@ -202,7 +201,7 @@ int main() {
 
     //increase/decrease speed on scrolling mouse wheel
     if(GetMouseWheelMoveV().y != 0.0) {
-        PLAYER_ENTITY.speed += GetMouseWheelMoveV().y * 2.0f;
+        PLAYER_ENTITY.speed = std::max(PLAYER_ENTITY.speed + GetMouseWheelMoveV().y * 2.0f, 0.0f);
     }
 
     // 3. Build mode toggle
