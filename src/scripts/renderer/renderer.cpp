@@ -10,7 +10,6 @@
 #include "renderer.h"
 #include "raylib.h"
 #include <cstdint>
-#include <iostream>
 #include <string>
 #include <vector>
 

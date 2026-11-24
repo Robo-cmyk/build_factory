@@ -3,14 +3,15 @@
  * @brief Implements the world class methods for procedural map generation, binary serialization,
  *        coordinate-to-tile lookups, and persistent storage of world buildings/chests.
  *
- * This implementation handles directory scaffolding (`/map`, `/building`, `/player`) and binary 
- * file I/O for saving and loading game states. Tile grids are flattened into a 1D vector using 
- * row-major order (`y * width + x`), while buildings like chests are serialized with dynamic 
+ * This implementation handles directory scaffolding (`/map`, `/building`, `/player`) and binary
+ * file I/O for saving and loading game states. Tile grids are flattened into a 1D vector using
+ * row-major order (`y * width + x`), while buildings like chests are serialized with dynamic
  * slot layouts based on their container type ID.
  */
 
 #include "world.h"
 #include "../building/chest.h"
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -215,9 +216,9 @@ void world::load_world(const char *world_file_path) {
  * @param y The Y-coordinate (row) of the tile.
  * @return uint8_t The tile ID stored at the flattened index `x + y * width`.
  */
-uint8_t world::get_tileID(int x, int y) { 
+uint8_t world::get_tileID(int x, int y) {
     // Convert 2D coordinates to 1D row-major index (Note: assumes coordinates are within bounds)
-    return worldvector[x + y * width]; 
+    return worldvector[x + y * width];
 }
 
 /**
@@ -248,7 +249,7 @@ void world::save_world(const char *filename) {
         // Write map dimension headers
         worldfile.write(reinterpret_cast<char *>(&width), sizeof(width));
         worldfile.write(reinterpret_cast<char *>(&height), sizeof(height));
-        
+
         // Write every tile ID sequentially to disk
         for (const auto &tile : worldvector) {
             worldfile.write(reinterpret_cast<const char *>(&tile), sizeof(tile));

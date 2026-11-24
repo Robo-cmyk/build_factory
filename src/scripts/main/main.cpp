@@ -35,8 +35,8 @@ std::string currentWorldFolder = "";    ///< Root directory path of the currentl
  */
 void placement1(Vector2 mouseScreen) {
   // 1. Calculate the top-left corner of the camera viewport in world pixels (centered on player)
-  float topLeftWorldX = PLAYER_ENTITY.playerX - 400.0f;
-  float topLeftWorldY = PLAYER_ENTITY.playerY - 240.0f;
+  float topLeftWorldX = PLAYER_ENTITY.playerX - GetScreenWidth()/2.0f;
+  float topLeftWorldY = PLAYER_ENTITY.playerY - GetScreenHeight()/2.0f;
 
   // 2. Translate screen-space cursor coordinates into world-space coordinates
   float mouseWorldX = topLeftWorldX + mouseScreen.x;
@@ -103,8 +103,8 @@ void placement1(Vector2 mouseScreen) {
  */
 void draw_game(float world_x, float world_y) {
   // 1. Compute top-left camera boundary in world pixels (half of 800x480 resolution)
-  float topLeftWorldX = world_x - 400.0f;
-  float topLeftWorldY = world_y - 240.0f;
+  float topLeftWorldX = world_x - GetScreenWidth()/2.0f;
+  float topLeftWorldY = world_y - GetScreenHeight()/2.0f;
 
   // 2. Determine the starting grid indices visible at the top-left corner of the viewport
   int startTileX = (int)(topLeftWorldX / 32.0f);
@@ -116,8 +116,8 @@ void draw_game(float world_x, float world_y) {
     startTileY--;
 
   // 3. Frustum-culled render loop: only iterate over tiles visible within the 800x480 screen (27x17 grid)
-  for (int col = 0; col < 27; col++) {
-    for (int row = 0; row < 17; row++) {
+  for (int col = 0; col < GetScreenWidth()/2 + 2; col++) {
+    for (int row = 0; row < GetScreenHeight()/2 + 2; row++) {
 
       int targetTileX = startTileX + col;
       int targetTileY = startTileY + row;
@@ -150,6 +150,7 @@ void draw_game(float world_x, float world_y) {
  * @return int Exit status code (0 on clean shutdown).
  */
 int main() {
+  SetConfigFlags(FLAG_WINDOW_RESIZABLE);
   InitWindow(800, 480, "Game");
   SetTargetFPS(60);
   RENDERER.load_assets();
@@ -168,17 +169,19 @@ int main() {
       // Set unified root folder path for map, building, and player subdirectories
       currentWorldFolder = "src/assets/maps/" + worldname;
 
-      int w, h;
+      int w, h, seed;
       std::cout << "Enter width should be between 100 to 10000 -> ";
       std::cin >> w;
       std::cout << "Enter height should be between 100 to 10000 -> ";
       std::cin >> h;
+      std::cout << "Enter seed -> ";
+      std::cin >> seed;
 
       // Validate dimensions; fallback to 100x100 if out of range
       if ((w >= 100 && w <= 10000) && (h >= 100 && h <= 10000)) {
-        WORLD.create_world(w, h, currentWorldFolder.c_str(), 100);
+        WORLD.create_world(w, h, currentWorldFolder.c_str(), seed);
       } else {
-        WORLD.create_world(100, 100, currentWorldFolder.c_str(), 100);
+        WORLD.create_world(100, 100, currentWorldFolder.c_str(), seed);
       }
 
       // FIX: Load directly out of the folder you created
@@ -246,12 +249,12 @@ int main() {
     }
 
     //prevent player from going out of bounds
-    PLAYER_ENTITY.playerY = std::clamp(PLAYER_ENTITY.playerY, 240, WORLD.height);
-    PLAYER_ENTITY.playerX = std::clamp(PLAYER_ENTITY.playerX, 400, WORLD.width);
+    PLAYER_ENTITY.playerY = std::clamp(PLAYER_ENTITY.playerY, GetScreenHeight()/2, WORLD.height);
+    PLAYER_ENTITY.playerX = std::clamp(PLAYER_ENTITY.playerX, GetScreenWidth()/2, WORLD.width);
 
     //increase/decrease speed on scrolling mouse wheel
     if(GetMouseWheelMoveV().y != 0.0) {
-        PLAYER_ENTITY.speed += GetMouseWheelMoveV().y * 2.0f;
+        PLAYER_ENTITY.speed = std::max(PLAYER_ENTITY.speed + GetMouseWheelMoveV().y, 0.0f);
     }
 
     // 3. Build mode toggle

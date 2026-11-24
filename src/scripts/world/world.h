@@ -8,8 +8,8 @@
  * @file world.h
  * @brief Defines the world class responsible for managing the game map, tile data, and world structures.
  *
- * The world class handles creating, loading, and saving 2D grid-based maps stored as a flattened 
- * 1D vector of tile IDs. It also manages the persistence and storage of interactive buildings 
+ * The world class handles creating, loading, and saving 2D grid-based maps stored as a flattened
+ * 1D vector of tile IDs. It also manages the persistence and storage of interactive buildings
  * and containers (such as chests) placed within the world.
  */
 
@@ -29,7 +29,7 @@ public:
    * @param height The vertical height of the world in tiles.
    * @param filepath Path where the newly created world file will be saved.
    */
-  void create_world(int width, int height, const char *filepath);
+  void create_world(int width, int height, const char *filepath, unsigned int seed);
 
   /**
    * @func save_world
